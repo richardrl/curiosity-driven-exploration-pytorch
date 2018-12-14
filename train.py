@@ -5,6 +5,7 @@ from config import *
 from torch.multiprocessing import Pipe
 
 from tensorboardX import SummaryWriter
+from monsterkong_randomensemble.envs import *
 
 import numpy as np
 
@@ -18,6 +19,8 @@ def main():
     if env_type == 'mario':
         env = BinarySpaceToDiscreteSpaceEnv(gym_super_mario_bros.make(env_id), COMPLEX_MOVEMENT)
     elif env_type == 'atari':
+        env = gym.make(env_id)
+    elif env_type == 'pygame':
         env = gym.make(env_id)
     else:
         raise NotImplementedError
@@ -68,6 +71,8 @@ def main():
         env_type = AtariEnvironment
     elif default_config['EnvType'] == 'mario':
         env_type = MarioEnvironment
+    elif default_config['EnvType'] == 'pygame':
+        env_type = PyGameEnvironment
     else:
         raise NotImplementedError
 

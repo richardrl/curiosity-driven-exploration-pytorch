@@ -1,0 +1,6 @@
+numpy
+torch
+opencv-python
+Pillow
+tensorboardX
+gym[atari]
