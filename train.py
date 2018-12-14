@@ -22,6 +22,7 @@ def main():
         env = gym.make(env_id)
     elif env_type == 'pygame':
         env = gym.make(env_id)
+        env = gym.wrappers.Monitor(env, default_config['OutDir'], force=True)
     else:
         raise NotImplementedError
     input_size = env.observation_space.shape  # 4

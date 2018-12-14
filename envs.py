@@ -127,7 +127,7 @@ class PyGameEnvironment(Environment):
         self.episode = 0
         self.h = h
         self.w = w
-        self.env = gym.make(self.env_id)
+        self.env = gym.wrappers.Monitor(gym.make(self.env_id), default_config['OutDir'], force=True)
         self.recent_rlist = deque(maxlen=100)
         self.reset()
 
