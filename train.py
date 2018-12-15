@@ -35,6 +35,8 @@ def main():
 
     is_load_model = False
     is_render = False
+    if not os.path.isdir('models'):
+        os.mkdir('models')
     model_path = 'models/{}.model'.format(env_id)
     icm_path = 'models/{}.icm'.format(env_id)
 
@@ -249,6 +251,8 @@ def main():
 
         if global_step % (num_worker * num_step * 100) == 0:
             print('Now Global Step :{}'.format(global_step))
+            model_path = 'models/{}.model'.format(global_step)
+            icm_path = 'models/{}.icm'.format(global_step)
             torch.save(agent.model.state_dict(), model_path)
             torch.save(agent.icm.state_dict(), icm_path)
 
