@@ -8,3 +8,4 @@ config.read('./config_monsterkong.conf')
 default = 'DEFAULT'
 # ---------------------------------
 default_config = config[default]
+mk_config = config["MONSTERKONG"]
