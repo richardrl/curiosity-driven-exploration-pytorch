@@ -110,9 +110,9 @@ def main():
     for idx in range(num_worker):
         parent_conn, child_conn = Pipe()
         if default_config['EnvType'] == 'pygame':
-            work = env_type(env_id, is_render, idx, child_conn)
+            work = env_type(env_id, is_render, idx, child_conn, h=default_config.getint('PostProcHeight'), w=default_config.getint('PostProcWidth'))
         else:
-            work = env_type(env_id, is_render, idx, child_conn, h=default_config['PostProcHeight'], w=default_config['PostProcWidth'])
+            work = env_type(env_id, is_render, idx, child_conn)
         work.start()
         works.append(work)
         parent_conns.append(parent_conn)
