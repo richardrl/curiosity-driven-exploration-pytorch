@@ -63,7 +63,7 @@ def main():
     clip_grad_norm = float(default_config['ClipGradNorm'])
 
     reward_rms = RunningMeanStd()
-    obs_rms = RunningMeanStd(shape=(1, 1, 84, 84))
+    obs_rms = RunningMeanStd(shape=(1, 1, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')))
 
     pre_obs_norm_step = int(default_config['ObsNormStep'])
     discounted_reward = RewardForwardFilter(gamma)
@@ -118,7 +118,7 @@ def main():
         parent_conns.append(parent_conn)
         child_conns.append(child_conn)
 
-    states = np.zeros([num_worker, 4, 84, 84])
+    states = np.zeros([num_worker, 4, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')])
 
     sample_episode = 0
     sample_rall = 0
@@ -141,7 +141,7 @@ def main():
 
         for parent_conn in parent_conns:
             s, r, d, rd, lr = parent_conn.recv()
-            next_obs.append(s[3, :, :].reshape([1, 84, 84]))
+            next_obs.append(s[3, :, :].reshape([1, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')]))
 
     next_obs = np.stack(next_obs)
     obs_rms.update(next_obs)
@@ -210,8 +210,8 @@ def main():
         total_values.append(value)
         # --------------------------------------------------
 
-        total_state = np.stack(total_state).transpose([1, 0, 2, 3, 4]).reshape([-1, 4, 84, 84])
-        total_next_state = np.stack(total_next_state).transpose([1, 0, 2, 3, 4]).reshape([-1, 4, 84, 84])
+        total_state = np.stack(total_state).transpose([1, 0, 2, 3, 4]).reshape([-1, 4, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')])
+        total_next_state = np.stack(total_next_state).transpose([1, 0, 2, 3, 4]).reshape([-1, 4, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')])
         total_action = np.stack(total_action).transpose().reshape([-1])
         total_done = np.stack(total_done).transpose()
         total_values = np.stack(total_values).transpose()

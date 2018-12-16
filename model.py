@@ -102,7 +102,8 @@ class CnnActorCriticNetwork(nn.Module):
             nn.LeakyReLU(),
             Flatten(),
             linear(
-                7 * 7 * 64,
+                # 7 * 7 * 64, changing for 84 -> 42
+                64,
                 512),
             nn.LeakyReLU()
         )
@@ -153,7 +154,8 @@ class ICMModel(nn.Module):
         self.output_size = output_size
         self.device = torch.device('cuda' if use_cuda else 'cpu')
 
-        feature_output = 7 * 7 * 64
+        # feature_output = 7 * 7 * 64
+        feature_output = 64
         self.feature = nn.Sequential(
             nn.Conv2d(
                 in_channels=4,
