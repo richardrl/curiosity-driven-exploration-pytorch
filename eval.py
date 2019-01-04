@@ -12,8 +12,8 @@ import pickle
 
 def main():
     print({section: dict(config[section]) for section in config.sections()})
-    env_id = default_config['EnvID']
-    env_type = default_config['EnvType']
+    env_id = curiosity_config['EnvID']
+    env_type = curiosity_config['EnvType']
 
     if env_type == 'mario':
         env = BinarySpaceToDiscreteSpaceEnv(gym_super_mario_bros.make(env_id), COMPLEX_MOVEMENT)
@@ -35,32 +35,32 @@ def main():
     target_path = 'models/{}.target'.format(env_id)
 
     use_cuda = False
-    use_gae = default_config.getboolean('UseGAE')
-    use_noisy_net = default_config.getboolean('UseNoisyNet')
+    use_gae = curiosity_config.getboolean('UseGAE')
+    use_noisy_net = curiosity_config.getboolean('UseNoisyNet')
 
-    lam = float(default_config['Lambda'])
+    lam = float(curiosity_config['Lambda'])
     num_worker = 1
 
-    num_step = int(default_config['NumStep'])
+    num_step = int(curiosity_config['NumStep'])
 
-    ppo_eps = float(default_config['PPOEps'])
-    epoch = int(default_config['Epoch'])
-    mini_batch = int(default_config['MiniBatch'])
+    ppo_eps = float(curiosity_config['PPOEps'])
+    epoch = int(curiosity_config['Epoch'])
+    mini_batch = int(curiosity_config['MiniBatch'])
     batch_size = int(num_step * num_worker / mini_batch)
-    learning_rate = float(default_config['LearningRate'])
-    entropy_coef = float(default_config['Entropy'])
-    gamma = float(default_config['Gamma'])
-    clip_grad_norm = float(default_config['ClipGradNorm'])
+    learning_rate = float(curiosity_config['LearningRate'])
+    entropy_coef = float(curiosity_config['Entropy'])
+    gamma = float(curiosity_config['Gamma'])
+    clip_grad_norm = float(curiosity_config['ClipGradNorm'])
 
     sticky_action = False
-    action_prob = float(default_config['ActionProb'])
-    life_done = default_config.getboolean('LifeDone')
+    action_prob = float(curiosity_config['ActionProb'])
+    life_done = curiosity_config.getboolean('LifeDone')
 
     agent = RNDAgent
 
-    if default_config['EnvType'] == 'atari':
+    if curiosity_config['EnvType'] == 'atari':
         env_type = AtariEnvironment
-    elif default_config['EnvType'] == 'mario':
+    elif curiosity_config['EnvType'] == 'mario':
         env_type = MarioEnvironment
     else:
         raise NotImplementedError

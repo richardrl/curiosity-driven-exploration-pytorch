@@ -17,8 +17,8 @@ from model import *
 from config import *
 from PIL import Image
 
-train_method = default_config['TrainMethod']
-max_step_per_episode = int(default_config['MaxStepPerEpisode'])
+train_method = curiosity_config['TrainMethod']
+max_step_per_episode = int(curiosity_config['MaxStepPerEpisode'])
 
 
 class Environment(Process):
@@ -121,13 +121,16 @@ class PyGameEnvironment(Environment):
         self.child_conn = child_conn
         self.steps = 0
         self.history_size = history_size
-        self.history = np.zeros([history_size, h, w])
+        if mk_config['ObsType'] == 'State':
+            self.history = np.zeros([history_size, 142])
+        else:
+            self.history = np.zeros([history_size, h, w])
         self.rall = 0
         self.worker_idx = worker_idx # What is this?
         self.episode = 0
         self.h = h
         self.w = w
-        self.env = gym.wrappers.Monitor(gym.make(self.env_id), default_config['OutDir'], force=True)
+        self.env = gym.wrappers.Monitor(gym.make(self.env_id), curiosity_config['OutDir'], force=True)
         self.recent_rlist = deque(maxlen=100)
         self.reset()
 
@@ -145,10 +148,13 @@ class PyGameEnvironment(Environment):
             force_done = done # What?
 
             # Cut off first frame by coping RHS last history_size-1 frames into LHS history_size+1 frames
-            self.history[:self.history_size-1, :, :] = self.history[1:, :, :]
+            # self.history[:self.history_size-1, :, :] = self.history[1:, :, :]
+            slices = tuple([None]*(len(obs.shape)))
+            self.history[:self.history_size-1, ...] = self.history[1:, ...]
 
             # Copy new observation into history buffer at last position (oldest -> newest)
-            self.history[self.history_size-1, :, :] = self.pre_proc(obs)
+            # self.history[self.history_size-1, :, :] = self.pre_proc(obs)
+            self.history[self.history_size-1, ...] = self.pre_proc(obs)
             self.rall += log_reward
             self.steps += 1
 
@@ -167,8 +173,9 @@ class PyGameEnvironment(Environment):
     def get_init_state(self, obs):
         # Fill history with copies of a static start state
         for i in range(self.history_size):
-            self.history[i, :, :] = self.pre_proc(obs)
-
+            # self.history[i, :, :] = self.pre_proc(obs)
+            slices = tuple([i] + [None]*(len(obs.shape)))
+            self.history[slices] = self.pre_proc(obs)
 
     def reset(self):
         self.last_action = 0 # TODO: Why?
@@ -180,9 +187,12 @@ class PyGameEnvironment(Environment):
         return self.history #TODO: isn't this just returning the history before reset?
 
     def pre_proc(self, X):
-        X = np.array(Image.fromarray(X).convert('L')).astype('float32')
-        x = cv2.resize(X, (self.h, self.w))
-        return x
+        if mk_config['ObsType'] == 'State':
+            return X
+        else:
+            X = np.array(Image.fromarray(X).convert('L')).astype('float32')
+            x = cv2.resize(X, (self.h, self.w))
+            return x
 # class MontezumaInfoWrapper(gym.Wrapper):
 #     def __init__(self, env, room_address):
 #         super(MontezumaInfoWrapper, self).__init__(env)

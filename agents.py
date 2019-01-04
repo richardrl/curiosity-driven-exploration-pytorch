@@ -7,8 +7,8 @@ import torch.optim as optim
 
 from torch.distributions.categorical import Categorical
 
-from model import CnnActorCriticNetwork, ICMModel
-
+from model import CnnActorCriticNetwork, ICMModel, ActorCriticNetwork, ICMModel_State
+from config import *
 
 class ICMAgent(object):
     def __init__(
@@ -29,7 +29,11 @@ class ICMAgent(object):
             use_gae=True,
             use_cuda=False,
             use_noisy_net=False):
-        self.model = CnnActorCriticNetwork(input_size, output_size, use_noisy_net)
+
+        if mk_config['ObsType'] == 'State':
+            self.model = ActorCriticNetwork(input_size, output_size)
+        else:
+            self.model = CnnActorCriticNetwork(input_size, output_size, use_noisy_net)
         self.num_env = num_env
         self.output_size = output_size
         self.input_size = input_size
@@ -44,8 +48,10 @@ class ICMAgent(object):
         self.ppo_eps = ppo_eps
         self.clip_grad_norm = clip_grad_norm
         self.device = torch.device('cuda' if use_cuda else 'cpu')
-
-        self.icm = ICMModel(input_size, output_size, use_cuda)
+        if mk_config['ObsType'] == 'State':
+            self.icm = ICMModel_State(mk_config.getint("ObsLength"), output_size)
+        else:
+            self.icm = ICMModel(input_size, output_size, use_cuda)
         self.optimizer = optim.Adam(list(self.model.parameters()) + list(self.icm.parameters()),
                                     lr=learning_rate)
         self.icm = self.icm.to(self.device)
@@ -55,15 +61,26 @@ class ICMAgent(object):
     def get_action(self, state):
         state = torch.Tensor(state).to(self.device)
         state = state.float()
+        # Image: torch.Size([16, 4, 42, 42])
+        # State: torch.Size([16, 4, 142])
         policy, value = self.model(state)
+        # Image: (16, 6)
+        # State: (16, 4, 6)
         action_prob = F.softmax(policy, dim=-1).data.cpu().numpy()
-
+        # Image: (16, 6)
+        # State: (16, 4, 6)
         action = self.random_choice_prob_index(action_prob)
 
         return action, value.data.cpu().numpy().squeeze(), policy.detach()
 
     @staticmethod
     def random_choice_prob_index(p, axis=1):
+        """
+
+        :param p:
+        :param axis:
+        :return:
+        """
         r = np.expand_dims(np.random.rand(p.shape[1 - axis]), axis=axis)
         return (p.cumsum(axis=axis) > r).argmax(axis=axis)
 

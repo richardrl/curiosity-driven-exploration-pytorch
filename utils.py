@@ -6,9 +6,9 @@ import numpy as np
 # else:
 #     num_step = int(default_config['NumStep'])
 
-use_gae = default_config.getboolean('UseGAE')
-lam = float(default_config['Lambda'])
-train_method = default_config['TrainMethod']
+use_gae = curiosity_config.getboolean('UseGAE')
+lam = float(curiosity_config['Lambda'])
+train_method = curiosity_config['TrainMethod']
 
 
 def make_train_data(reward, done, value, gamma, num_step, num_worker):
@@ -53,6 +53,10 @@ class RunningMeanStd(object):
 
     def update_from_moments(self, batch_mean, batch_var, batch_count):
         delta = batch_mean - self.mean
+        # Image
+        # batch_mean: 1, 42, 42
+        # self.mean: 1, 1, 42, 42
+
         tot_count = self.count + batch_count
 
         new_mean = self.mean + delta * batch_count / tot_count

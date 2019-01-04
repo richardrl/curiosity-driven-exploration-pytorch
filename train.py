@@ -12,9 +12,9 @@ import numpy as np
 
 def main():
     print({section: dict(config[section]) for section in config.sections()})
-    train_method = default_config['TrainMethod']
-    env_id = default_config['EnvID']
-    env_type = default_config['EnvType']
+    train_method = curiosity_config['TrainMethod']
+    env_id = curiosity_config['EnvID']
+    env_type = curiosity_config['EnvType']
 
     if env_type == 'mario':
         env = BinarySpaceToDiscreteSpaceEnv(gym_super_mario_bros.make(env_id), COMPLEX_MOVEMENT)
@@ -22,10 +22,13 @@ def main():
         env = gym.make(env_id)
     elif env_type == 'pygame':
         env = gym.make(env_id)
-        env = gym.wrappers.Monitor(env, default_config['OutDir'], force=True)
+        env = gym.wrappers.Monitor(env, curiosity_config['OutDir'], force=True)
     else:
         raise NotImplementedError
-    input_size = env.observation_space.shape  # 4
+    if mk_config['ObsType'] == 'State':
+        input_size = 4*mk_config.getint('ObsLength') # batch * obs length
+    else:
+        input_size = env.observation_space.shape  # 4
     output_size = env.action_space.n  # 2
 
     if 'Breakout' in env_id:
@@ -42,39 +45,42 @@ def main():
 
     writer = SummaryWriter()
 
-    use_cuda = default_config.getboolean('UseGPU')
-    use_gae = default_config.getboolean('UseGAE')
-    use_noisy_net = default_config.getboolean('UseNoisyNet')
+    use_cuda = curiosity_config.getboolean('UseGPU')
+    use_gae = curiosity_config.getboolean('UseGAE')
+    use_noisy_net = curiosity_config.getboolean('UseNoisyNet')
 
-    lam = float(default_config['Lambda'])
-    num_worker = int(default_config['NumEnv'])
+    lam = float(curiosity_config['Lambda'])
+    num_worker = int(curiosity_config['NumEnv'])
 
-    num_step = int(default_config['NumStep'])
+    num_step = int(curiosity_config['NumStep'])
 
-    ppo_eps = float(default_config['PPOEps'])
-    epoch = int(default_config['Epoch'])
-    mini_batch = int(default_config['MiniBatch'])
+    ppo_eps = float(curiosity_config['PPOEps'])
+    epoch = int(curiosity_config['Epoch'])
+    mini_batch = int(curiosity_config['MiniBatch'])
     batch_size = int(num_step * num_worker / mini_batch)
-    learning_rate = float(default_config['LearningRate'])
-    entropy_coef = float(default_config['Entropy'])
-    gamma = float(default_config['Gamma'])
-    eta = float(default_config['ETA'])
+    learning_rate = float(curiosity_config['LearningRate'])
+    entropy_coef = float(curiosity_config['Entropy'])
+    gamma = float(curiosity_config['Gamma'])
+    eta = float(curiosity_config['ETA'])
 
-    clip_grad_norm = float(default_config['ClipGradNorm'])
+    clip_grad_norm = float(curiosity_config['ClipGradNorm'])
 
     reward_rms = RunningMeanStd()
-    obs_rms = RunningMeanStd(shape=(1, 1, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')))
+    if mk_config['ObsType'] == 'State':
+        obs_rms = RunningMeanStd(shape=(1, mk_config.getint('ObsLength')))
+    else:
+        obs_rms = RunningMeanStd(shape=(1, 1, curiosity_config.getint('PostProcHeight'), curiosity_config.getint('PostProcWidth')))
 
-    pre_obs_norm_step = int(default_config['ObsNormStep'])
+    pre_obs_norm_step = int(curiosity_config['ObsNormStep'])
     discounted_reward = RewardForwardFilter(gamma)
 
     agent = ICMAgent
 
-    if default_config['EnvType'] == 'atari':
+    if curiosity_config['EnvType'] == 'atari':
         env_type = AtariEnvironment
-    elif default_config['EnvType'] == 'mario':
+    elif curiosity_config['EnvType'] == 'mario':
         env_type = MarioEnvironment
-    elif default_config['EnvType'] == 'pygame':
+    elif curiosity_config['EnvType'] == 'pygame':
         env_type = PyGameEnvironment
     else:
         raise NotImplementedError
@@ -109,8 +115,8 @@ def main():
     child_conns = []
     for idx in range(num_worker):
         parent_conn, child_conn = Pipe()
-        if default_config['EnvType'] == 'pygame':
-            work = env_type(env_id, is_render, idx, child_conn, h=default_config.getint('PostProcHeight'), w=default_config.getint('PostProcWidth'))
+        if curiosity_config['EnvType'] == 'pygame':
+            work = env_type(env_id, is_render, idx, child_conn, h=curiosity_config.getint('PostProcHeight'), w=curiosity_config.getint('PostProcWidth'))
         else:
             work = env_type(env_id, is_render, idx, child_conn)
         work.start()
@@ -118,7 +124,10 @@ def main():
         parent_conns.append(parent_conn)
         child_conns.append(child_conn)
 
-    states = np.zeros([num_worker, 4, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')])
+    if mk_config['ObsType'] == 'State':
+        states = np.zeros([num_worker, 4, mk_config.getint('ObsLength')])
+    else:
+        states = np.zeros([num_worker, 4, curiosity_config.getint('PostProcHeight'), curiosity_config.getint('PostProcWidth')])
 
     sample_episode = 0
     sample_rall = 0
@@ -141,7 +150,9 @@ def main():
 
         for parent_conn in parent_conns:
             s, r, d, rd, lr = parent_conn.recv()
-            next_obs.append(s[3, :, :].reshape([1, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')]))
+            # next_obs.append(s[3, :, :].reshape([1, curiosity_config.getint('PostProcHeight'), curiosity_config.getint('PostProcWidth')]))
+            s_frame = s[3, ...]
+            next_obs.append(np.expand_dims(s_frame, 0))
 
     next_obs = np.stack(next_obs)
     obs_rms.update(next_obs)
@@ -154,7 +165,15 @@ def main():
         global_update += 1
 
         # Step 1. n-step rollout
+        # for _ in range(num_step):
         for _ in range(num_step):
+            assert obs_rms.mean.shape[3:] == states.shape[3:], str(obs_rms.mean.shape) + "\n" + str(states.shape)
+            # IMAGE DIMENSIONS:
+            # obs: 1, 1, 42, 42
+            # states: 16, 4, 42, 42
+            # STATE DIMENSIONS:
+            # obs:
+            # states:
             actions, value, policy = agent.get_action(np.float32(states) - obs_rms.mean / np.sqrt(obs_rms.var))
 
             for parent_conn, action in zip(parent_conns, actions):
@@ -191,7 +210,8 @@ def main():
             total_values.append(value)
             total_policy.append(policy)
 
-            states = next_states[:, :, :, :]
+            # states = next_states[:, :, :, :]
+            states = next_states[:, ... ]
 
             sample_rall += log_rewards[sample_env_idx]
 
@@ -210,8 +230,15 @@ def main():
         total_values.append(value)
         # --------------------------------------------------
 
-        total_state = np.stack(total_state).transpose([1, 0, 2, 3, 4]).reshape([-1, 4, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')])
-        total_next_state = np.stack(total_next_state).transpose([1, 0, 2, 3, 4]).reshape([-1, 4, default_config.getint('PostProcHeight'), default_config.getint('PostProcWidth')])
+        # Take list of states in total_state, stack them together. (16, 5, 4, 42, 42) -> (80, 4, 42, 42)
+        if mk_config['ObsType'] == 'State':
+            total_state = np.stack(total_state).transpose([1, 0, 2, 3]).reshape([-1, 4, mk_config.getint('ObsLength')])
+            total_state = np.stack(total_next_state).transpose([1, 0, 2, 3]).reshape([-1, 4, mk_config.getint('ObsLength')])
+        else:
+            total_state = np.stack(total_state).transpose([1, 0, 2, 3, 4]).reshape(
+                [-1, 4, curiosity_config.getint('PostProcHeight'), curiosity_config.getint('PostProcWidth')])
+            total_next_state = np.stack(total_next_state).transpose([1, 0, 2, 3, 4]).reshape(
+                [-1, 4, curiosity_config.getint('PostProcHeight'), curiosity_config.getint('PostProcWidth')])
         total_action = np.stack(total_action).transpose().reshape([-1])
         total_done = np.stack(total_done).transpose()
         total_values = np.stack(total_values).transpose()

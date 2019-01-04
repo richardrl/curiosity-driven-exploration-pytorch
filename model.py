@@ -70,6 +70,40 @@ class Flatten(nn.Module):
     def forward(self, input):
         return input.view(input.size(0), -1)
 
+class ActorCriticNetwork(nn.Module):
+    """
+    State version, no convolutions
+    """
+    def __init__(self, input_size, output_size):
+        super(ActorCriticNetwork, self).__init__()
+        self.actor_fc1 = nn.Linear(input_size, 512)
+        self.actor_fc2 = nn.Linear(512, 512)
+        self.actor_fc3 = nn.Linear(512, output_size)
+        self.leakyReLU = nn.LeakyReLU()
+
+        self.critic_fc1 = nn.Linear(input_size, 512)
+        self.critic_fc2 = nn.Linear(512, 512)
+        self.critic_fc3 = nn.Linear(512, 1)
+
+    def forward(self, state):
+        """
+
+        :param state: (batch, obs_len)
+        :return:
+        """
+        state = state.view(state.shape[0], -1)
+        x = self.actor_fc1(state)
+        x = self.leakyReLU(x)
+        x = self.actor_fc2(x)
+        x = self.leakyReLU(x)
+        policy = self.actor_fc3(x)
+
+        x = self.critic_fc1(state)
+        x = self.leakyReLU(x)
+        x = self.critic_fc2(x)
+        x = self.leakyReLU(x)
+        value = self.critic_fc3(x)
+        return policy, value
 
 class CnnActorCriticNetwork(nn.Module):
     def __init__(self, input_size, output_size, use_noisy_net=False):
@@ -145,11 +179,60 @@ class CnnActorCriticNetwork(nn.Module):
         value = self.critic(x)
         return policy, value
 
+class ICMModel_State(nn.Module):
+    def __init__(self, input_size, output_size,):
+        super(ICMModel_State, self).__init__()
+        self.input_size = input_size
+        self.output_size = output_size
+        self.inverse_net_fc1 = nn.Linear(input_size, 512)
+        self.inverse_net_fc2 = nn.Linear(512, output_size)
+
+        self.leakyReLU = nn.LeakyReLU()
+
+        self.forward_net_1_fc1 = nn.Linear(4 * input_size + output_size, 512)
+
+        self.residual = [nn.Sequential(
+            nn.Linear(output_size + 512, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, 512),
+        )] * 8
+
+        self.forward_net_2_fc1 = nn.Linear(512 + output_size, 4 * input_size)
+
+    def forward(self, inputs):
+        state, next_state, action = inputs
+
+        # get pred action
+        # pred_action = torch.cat((encode_state, encode_next_state), 1)
+        pred_action = torch.cat((state, next_state), 1)
+
+        x = self.inverse_net_fc1(pred_action)
+        pred_action = self.inverse_net_fc2(x)
+
+        # ---------------------
+
+        # get pred next state
+        # pred_next_state_feature_orig = torch.cat((encode_state, action), 1)
+
+        next_state = next_state.view(next_state.shape[0], -1)
+        pred_next_state_feature_orig = torch.cat((next_state, action), 1)
+        x = self.forward_net_1_fc1(pred_next_state_feature_orig)
+        pred_next_state_feature_orig = self.leakyReLU(x)
+
+        # residual
+        for i in range(4):
+            pred_next_state_feature = self.residual[i * 2](torch.cat((pred_next_state_feature_orig, action), 1))
+            pred_next_state_feature_orig = self.residual[i * 2 + 1](
+                torch.cat((pred_next_state_feature, action), 1)) + pred_next_state_feature_orig
+
+        pred_next_state_feature = self.forward_net_2_fc1(torch.cat((pred_next_state_feature_orig, action), 1))
+
+        real_next_state_feature = next_state
+        return real_next_state_feature, pred_next_state_feature, pred_action
 
 class ICMModel(nn.Module):
     def __init__(self, input_size, output_size, use_cuda=True):
         super(ICMModel, self).__init__()
-
         self.input_size = input_size
         self.output_size = output_size
         self.device = torch.device('cuda' if use_cuda else 'cpu')
