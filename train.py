@@ -1,13 +1,18 @@
+import os
+import sys
+os.environ["CONFIG_FILE"] = sys.argv[1]
+
+
 from agents import *
 from envs import *
 from utils import *
-from config import *
 from torch.multiprocessing import Pipe
 
 from tensorboardX import SummaryWriter
 from monsterkong_randomensemble.envs import *
 
 import numpy as np
+import configparser
 
 
 def main():
@@ -288,4 +293,5 @@ def main():
 
 
 if __name__ == '__main__':
+    # ---------------------------------
     main()
