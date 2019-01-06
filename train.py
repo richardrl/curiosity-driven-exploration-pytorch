@@ -1,7 +1,12 @@
+# import argparse
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--conf_file', help="Configuration file")
+#
+# args = parser.parse_args()
+
 import os
 import sys
 os.environ["CONFIG_FILE"] = sys.argv[1]
-
 
 from agents import *
 from envs import *
@@ -198,7 +203,10 @@ def main():
             dones = np.hstack(dones)
             real_dones = np.hstack(real_dones)
 
+            assert next_states.shape == states.shape, print(F"\n{next_states.shape} \n{states.shape}")
+
             # total reward = int reward
+            assert states.shape[1]==4, states.shape[1]
             intrinsic_reward = agent.compute_intrinsic_reward(
                 (states - obs_rms.mean) / np.sqrt(obs_rms.var),
                 (next_states - obs_rms.mean) / np.sqrt(obs_rms.var),
@@ -238,7 +246,7 @@ def main():
         # Take list of states in total_state, stack them together. (16, 5, 4, 42, 42) -> (80, 4, 42, 42)
         if mk_config['ObsType'] == 'State':
             total_state = np.stack(total_state).transpose([1, 0, 2, 3]).reshape([-1, 4, mk_config.getint('ObsLength')])
-            total_state = np.stack(total_next_state).transpose([1, 0, 2, 3]).reshape([-1, 4, mk_config.getint('ObsLength')])
+            total_next_state = np.stack(total_next_state).transpose([1, 0, 2, 3]).reshape([-1, 4, mk_config.getint('ObsLength')])
         else:
             total_state = np.stack(total_state).transpose([1, 0, 2, 3, 4]).reshape(
                 [-1, 4, curiosity_config.getint('PostProcHeight'), curiosity_config.getint('PostProcWidth')])

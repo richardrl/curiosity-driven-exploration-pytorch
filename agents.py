@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from torch.distributions.categorical import Categorical
 
-from model import CnnActorCriticNetwork, ICMModel, ActorCriticNetwork, ICMModel_State
+from model import CnnActorCriticNetwork, ICMModel, ActorCriticNetwork, ICMModelState
 from config import *
 
 class ICMAgent(object):
@@ -49,7 +49,7 @@ class ICMAgent(object):
         self.clip_grad_norm = clip_grad_norm
         self.device = torch.device('cuda' if use_cuda else 'cpu')
         if mk_config['ObsType'] == 'State':
-            self.icm = ICMModel_State(mk_config.getint("ObsLength"), output_size)
+            self.icm = ICMModelState(mk_config.getint("ObsLength"), output_size)
         else:
             self.icm = ICMModel(input_size, output_size, use_cuda)
         self.optimizer = optim.Adam(list(self.model.parameters()) + list(self.icm.parameters()),
@@ -102,14 +102,14 @@ class ICMAgent(object):
         return intrinsic_reward.data.cpu().numpy()
 
     def train_model(self, s_batch, next_s_batch, target_batch, y_batch, adv_batch, old_policy):
-        s_batch = torch.FloatTensor(s_batch).to(self.device)
+        s_batch = torch.FloatTensor(s_batch).to(self.device) #TODO: numbers are way too big... no way this is correct
         next_s_batch = torch.FloatTensor(next_s_batch).to(self.device)
         target_batch = torch.FloatTensor(target_batch).to(self.device)
         y_batch = torch.LongTensor(y_batch).to(self.device)
         adv_batch = torch.FloatTensor(adv_batch).to(self.device)
 
-        sample_range = np.arange(len(s_batch))
-        ce = nn.CrossEntropyLoss()
+        sample_range = np.arange(len(s_batch)) # TODO: way too big
+        cross_entropy = nn.CrossEntropyLoss()
         forward_mse = nn.MSELoss()
 
         with torch.no_grad():
@@ -133,8 +133,10 @@ class ICMAgent(object):
                 real_next_state_feature, pred_next_state_feature, pred_action = self.icm(
                     [s_batch[sample_idx], next_s_batch[sample_idx], action_onehot])
 
-                inverse_loss = ce(
+                inverse_loss = cross_entropy(
                     pred_action, y_batch[sample_idx])
+                # State: pred_action (256, 8, 6), y_batch (2048)
+                # Image: pred_action (256, 6), y_batch (2048)
 
                 forward_loss = forward_mse(
                     pred_next_state_feature, real_next_state_feature.detach())

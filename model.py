@@ -179,17 +179,20 @@ class CnnActorCriticNetwork(nn.Module):
         value = self.critic(x)
         return policy, value
 
-class ICMModel_State(nn.Module):
+class ICMModelState(nn.Module):
     def __init__(self, input_size, output_size,):
-        super(ICMModel_State, self).__init__()
+        super(ICMModelState, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
-        self.inverse_net_fc1 = nn.Linear(input_size, 512)
+
+        self.feature = nn.Linear(input_size * 4, 512)
+
+        self.inverse_net_fc1 = nn.Linear(512 * 2, 512)
         self.inverse_net_fc2 = nn.Linear(512, output_size)
 
         self.leakyReLU = nn.LeakyReLU()
 
-        self.forward_net_1_fc1 = nn.Linear(4 * input_size + output_size, 512)
+        self.forward_net_1_fc1 = nn.Linear(output_size + 512, 512)
 
         self.residual = [nn.Sequential(
             nn.Linear(output_size + 512, 512),
@@ -197,14 +200,25 @@ class ICMModel_State(nn.Module):
             nn.Linear(512, 512),
         )] * 8
 
-        self.forward_net_2_fc1 = nn.Linear(512 + output_size, 4 * input_size)
+        self.forward_net_2_fc1 = nn.Linear(512 + output_size, 512)
 
     def forward(self, inputs):
+        # (256, 4, 142), (256, 4, 142), (256, 6) so action is onehot? Yes, action one hot is correct
+        # (16, 568), (16, 568), (16, 6)
         state, next_state, action = inputs
+        assert len(state.shape) == 3 and len(next_state.shape) == 3
+        assert state.shape[1] == 4 and state.shape[2] == self.input_size, state.shape
+        assert next_state.shape[1] == 4 and next_state.shape[2] == self.input_size, next_state.shape
+        state = state.view(state.shape[0], -1)
+        next_state = next_state.view(next_state.shape[0], -1)
 
+        state = self.feature(state)
+        next_state = self.feature(next_state)
         # get pred action
         # pred_action = torch.cat((encode_state, encode_next_state), 1)
+        # (256, 8, 142)
         pred_action = torch.cat((state, next_state), 1)
+
 
         x = self.inverse_net_fc1(pred_action)
         pred_action = self.inverse_net_fc2(x)
@@ -214,7 +228,6 @@ class ICMModel_State(nn.Module):
         # get pred next state
         # pred_next_state_feature_orig = torch.cat((encode_state, action), 1)
 
-        next_state = next_state.view(next_state.shape[0], -1)
         pred_next_state_feature_orig = torch.cat((next_state, action), 1)
         x = self.forward_net_1_fc1(pred_next_state_feature_orig)
         pred_next_state_feature_orig = self.leakyReLU(x)
@@ -292,12 +305,15 @@ class ICMModel(nn.Module):
                 p.bias.data.zero_()
 
     def forward(self, inputs):
+        # (16, 4, 42, 42), (16, 4, 42, 42), (16, 6)
         state, next_state, action = inputs
 
         encode_state = self.feature(state)
         encode_next_state = self.feature(next_state)
         # get pred action
+        # (16, 1024)
         pred_action = torch.cat((encode_state, encode_next_state), 1)
+
         pred_action = self.inverse_net(pred_action)
         # ---------------------
 
